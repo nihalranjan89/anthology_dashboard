@@ -1,0 +1,104 @@
+{% extends "anthology/base.html" %}
+{% block content %}
+<h3>Reports</h3>
+
+<!-- Filter Form -->
+<!-- Filter Form -->
+<form method="get" class="row g-3 mb-4 align-items-end">
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Site</label>
+    <input type="text" name="site" class="form-control" placeholder="Enter site"
+           value="{{ selected_site }}">
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Start Date</label>
+    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">End Date</label>
+    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Status</label>
+    <select name="status" class="form-select" onchange="this.form.submit()">
+      <option value="final" {% if selected_status == 'final' %}selected{% endif %}>Final</option>
+      <option value="draft" {% if selected_status == 'draft' %}selected{% endif %}>Draft</option>
+    </select>
+  </div>
+
+  {% if selected_status == 'final' %}
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Pass / Fail</label>
+    <select name="pass_status" class="form-select">
+      <option value="">All</option>
+      <option value="passed" {% if pass_filter == 'passed' %}selected{% endif %}>Passed</option>
+      <option value="failed" {% if pass_filter == 'failed' %}selected{% endif %}>Failed</option>
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="col-md-1">
+    <button type="submit" class="btn btn-primary w-100">Filter</button>
+  </div>
+  <div class="col-md-1">
+    <a href="{% url 'anthology:reports' %}" class="btn btn-outline-secondary w-100">Clear</a>
+  </div>
+</form>
+
+
+
+<!-- Report Table -->
+<table class="table table-striped align-middle">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Study</th>
+      <th>Site</th>
+      <th>Product</th>
+      {% if selected_status == 'final' %}
+        <th>Approved On</th>
+        <th>Status</th>
+      {% else %}
+        <th>Start Date</th>
+        <th>End Date</th>
+      {% endif %}
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in reports %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.study_id }}</td>
+        <td>{{ r.site }}</td>
+        <td>{{ r.product }}</td>
+        {% if selected_status == 'final' %}
+          <td>{{ r.approved_on|date:"Y-m-d" }}</td>
+          <td>
+            {% if r.passed %}
+              <span class="badge bg-success">Passed</span>
+            {% else %}
+              <span class="badge bg-danger">Failed</span>
+            {% endif %}
+          </td>
+        {% else %}
+          <td>{{ r.start_date|date:"Y-m-d" }}</td>
+          <td>{{ r.end_date|date:"Y-m-d" }}</td>
+        {% endif %}
+        <td>
+          {% if selected_status == 'final' %}
+            <a href="{% url 'anthology:report_detail' r.id %}" class="btn btn-sm btn-outline-primary">View</a>
+          {% else %}
+            <a href="{% url 'anthology:approval_review' r.id %}" class="btn btn-sm btn-outline-secondary">Review</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="text-center text-muted">No reports found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

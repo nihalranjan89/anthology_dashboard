@@ -1,0 +1,22 @@
+{% extends "anthology/base.html" %}
+{% block content %}
+<h3>Review Draft {{ draft.id }}</h3>
+<p><b>Study:</b> {{ draft.study_id }} &nbsp; <b>Site:</b> {{ draft.site }}</p>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="mb-3">
+    <label class="form-label">Decision</label><br>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" id="pass" name="passed" value="pass">
+      <label class="form-check-label" for="pass">Pass</label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" id="fail" name="passed" value="fail">
+      <label class="form-check-label" for="fail">Fail</label>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-success">Confirm</button>
+  <a href="{% url 'anthology:drafts' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}
