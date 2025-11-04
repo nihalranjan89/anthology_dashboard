@@ -21,6 +21,10 @@ from django.contrib.auth.models import Group
 from .decorators import role_required
 from django.contrib.auth.decorators import login_required
 from .decorators import role_required
+import json
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponseForbidden
+from django.utils import timezone
 
 
 
@@ -127,7 +131,7 @@ def reports_list(request):
     return render(request, 'anthology/reports.html', context)
 
 
-@role_required(['MANUFACTURER'])
+# @role_required(['MANUFACTURER'])
 def report_detail(request, report_id):
     report = get_object_or_404(FinalReport, pk=report_id)
     # create a signed URL or proxy the blob; here we create blob url (SAS must be appended)
@@ -135,12 +139,9 @@ def report_detail(request, report_id):
     return render(request, 'anthology/report_detail.html', {'report': report, 'blob_url': blob_url})
 
 @login_required(login_url='anthology:login')
+@role_required(['ADMIN', 'APPROVER'])
 def drafts_list(request):
-    role = request.session.get('USER_ROLE')
-    if role not in ('ADMIN', 'APPROVER'):
-        return HttpResponseForbidden("Forbidden")
-
-    drafts = DraftReport.objects.all().select_related('approval').order_by('-start_date')[:100]
+    drafts = DraftReport.objects.all().select_related('approval').order_by('-start_date')
 
     draft_data = []
     pending_count = 0
@@ -148,23 +149,30 @@ def drafts_list(request):
     for d in drafts:
         if hasattr(d, 'approval'):
             status = "✅ Passed" if d.approval.passed else "❌ Failed"
+            is_pending = False
         else:
             status = "⏳ Pending"
+            is_pending = True
             pending_count += 1
 
         draft_data.append({
             'id': d.id,
+            'region': d.region,
             'study_id': d.study_id,
             'site': d.site,
+            'batch': d.batch,
+            'product': d.product,
             'start_date': d.start_date,
+            'end_date': d.end_date,
             'status': status,
-            'is_pending': status == "⏳ Pending",
+            'is_pending': is_pending,
+            'pdf_url': d.test_pdf.url if d.test_pdf else None,
         })
 
-    # Save pending count in session for navbar notifications
     request.session['PENDING_DRAFT_COUNT'] = pending_count
 
     return render(request, 'anthology/drafts.html', {'drafts': draft_data})
+
 
 @role_required(['ADMIN', 'APPROVER'])
 def approval_review(request, draft_id):
@@ -260,6 +268,44 @@ def processing_logs(request):
         {"timestamp": "2025-11-01 17:12:08", "action": "Draft ST002 failed QA", "user": "approver_user"},
     ]
     return render(request, 'anthology/logs.html', {"logs": logs})
+
+
+
+@role_required(['ADMIN', 'APPROVER'])
+def review_draft(request, draft_id):
+    """Review a specific draft report."""
+    draft = get_object_or_404(DraftReport, pk=draft_id)
+    return render(request, 'anthology/review_draft.html', {'draft': draft})
+
+
+@csrf_exempt
+@login_required(login_url='anthology:login')
+@role_required(['ADMIN', 'APPROVER'])
+def approval_review(request, draft_id):
+    draft = get_object_or_404(DraftReport, pk=draft_id)
+    if request.method == 'POST':
+        data = json.loads(request.body.decode('utf-8'))
+        passed = data.get('passed', False)
+        recipients = data.get('recipients', [])
+
+        Approval.objects.update_or_create(
+            report=draft,
+            defaults={
+                'passed': passed,
+                'approved_by': request.session.get('USER_ID', 'system'),
+                'approved_on': timezone.now()
+            }
+        )
+
+        # Send email (to be added next)
+        # Log action in AccessLog
+
+        return JsonResponse({'status': 'ok'})
+    return HttpResponseForbidden()
+
+
+
+
 
 
 

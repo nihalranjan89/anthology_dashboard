@@ -1,0 +1,104 @@
+{% extends "anthology/base.html" %}
+{% block content %}
+<div class="container mt-4">
+
+  <h4 class="mb-3">Review Draft — {{ draft.study_id }}</h4>
+
+  <!-- PDF Viewer -->
+  {% if draft.test_pdf %}
+    <div class="border rounded mb-3" style="height:80vh;">
+      <iframe src="{{ draft.test_pdf.url }}" width="100%" height="100%" style="border:none;"></iframe>
+    </div>
+    <a href="{{ draft.test_pdf.url }}" download class="btn btn-outline-secondary mb-3">
+      Download PDF
+    </a>
+  {% else %}
+    <p class="text-muted">No PDF uploaded for this draft.</p>
+  {% endif %}
+
+  <!-- Approve Button -->
+  <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#approvalModal">
+    Approve
+  </button>
+
+</div>
+
+<!-- Approval Modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1" aria-labelledby="approvalModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="approvalModalLabel">Approval Dialog</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="fw-semibold">Edit Mail List:</p>
+        <div id="recipientList" class="mb-3"></div>
+
+        <div class="input-group mb-3">
+          <input type="email" id="newRecipient" class="form-control" placeholder="Add email">
+          <button class="btn btn-outline-success" type="button" id="addRecipientBtn">Add</button>
+        </div>
+
+        <hr>
+        <p class="fw-semibold mb-2">Select Outcome:</p>
+        <div class="btn-group" role="group">
+          <button type="button" class="btn btn-success" id="approveBtn">Pass</button>
+          <button type="button" class="btn btn-danger" id="rejectBtn">Fail</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let recipients = ["qa_team@pg.com", "admin@pg.com"];
+const draftId = {{ draft.id }};
+
+function renderRecipients() {
+  const listDiv = document.getElementById('recipientList');
+  listDiv.innerHTML = recipients.map((email, idx) => `
+    <div class="d-flex align-items-center mb-1">
+      <span class="me-2">${email}</span>
+      <button class="btn btn-sm btn-outline-danger" onclick="removeRecipient(${idx})">Remove</button>
+    </div>
+  `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', renderRecipients);
+
+document.getElementById('addRecipientBtn').addEventListener('click', () => {
+  const newEmail = document.getElementById('newRecipient').value.trim();
+  if (newEmail && !recipients.includes(newEmail)) {
+    recipients.push(newEmail);
+    document.getElementById('newRecipient').value = '';
+    renderRecipients();
+  }
+});
+
+function removeRecipient(idx) {
+  recipients.splice(idx, 1);
+  renderRecipients();
+}
+
+document.getElementById('approveBtn').addEventListener('click', () => submitApproval(true));
+document.getElementById('rejectBtn').addEventListener('click', () => submitApproval(false));
+
+function submitApproval(passed) {
+  fetch(`/approvals/review/${draftId}/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify({ passed, recipients })
+  }).then(res => {
+    if (res.ok) {
+      window.location.href = "{% url 'anthology:drafts' %}";
+    } else {
+      alert("Error submitting approval");
+    }
+  });
+}
+</script>
+{% endblock %}

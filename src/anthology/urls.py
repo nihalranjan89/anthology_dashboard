@@ -14,5 +14,7 @@ urlpatterns = [
     path('approvals/review/<int:draft_id>/', views.approval_review, name='approval_review'),
     path('', views.reports_list, name='home'),
     path('logs/processing/', views.processing_logs, name='processing_logs'),
+    path('drafts/review/<int:draft_id>/', views.review_draft, name='review_draft'),
+
 
 ]

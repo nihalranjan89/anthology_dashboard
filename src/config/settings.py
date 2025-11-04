@@ -117,3 +117,8 @@ SSO_LOGIN_URI = env('SSO_LOGIN_URI', default='')
 SSO_LOGOUT_URI = env('SSO_LOGOUT_URI', default='')
 SSO_CALLBACK_URI = env('SSO_CALLBACK_URI', default='login_cb')
 ACCESS_APPROVER_EMAIL = env('ACCESS_APPROVER_EMAIL', default='')
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
