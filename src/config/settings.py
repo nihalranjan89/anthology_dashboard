@@ -64,6 +64,19 @@ DATABASES = {
         },
     }
 }
+'''
+import ldap
+from django_auth_ldap.config import LDAPSearch
+
+# LDAP Basic Config
+AUTH_LDAP_SERVER_URI = os.getenv('LDAP_SERVER')
+AUTH_LDAP_BIND_DN = os.getenv('LDAP_BIND_DN')
+AUTH_LDAP_BIND_PASSWORD = os.getenv('LDAP_BIND_PASSWORD')
+AUTH_LDAP_USER_SEARCH = LDAPSearch(
+    os.getenv('LDAP_BASE_DN'),
+    ldap.SCOPE_SUBTREE,
+    "(sAMAccountName=%(user)s)"
+)'''
 
 AUTH_PASSWORD_VALIDATORS = []
 

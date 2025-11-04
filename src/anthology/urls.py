@@ -4,6 +4,7 @@ from . import views
 app_name = 'anthology'
 
 urlpatterns = [
+    #path('login/', views.login_view, name='login'),
     path('login/', views.login_view, name='login'),
     path('login_cb/', views.login_callback, name='login_cb'),
     path('logout/', views.logout_view, name='logout'),
@@ -12,4 +13,6 @@ urlpatterns = [
     path('drafts/', views.drafts_list, name='drafts'),
     path('approvals/review/<int:draft_id>/', views.approval_review, name='approval_review'),
     path('', views.reports_list, name='home'),
+    path('logs/processing/', views.processing_logs, name='processing_logs'),
+
 ]

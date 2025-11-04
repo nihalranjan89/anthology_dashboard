@@ -8,11 +8,54 @@ from datetime import datetime
 from django.db.models import Q
 from django.utils import timezone
 from .models import Approval, FinalReport
+from .services.ldap_service import get_site_members, get_region_members
+from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponseForbidden
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib.auth import authenticate, login, logout
+from django.contrib import messages
+from django.http import HttpResponseForbidden
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
+from .decorators import role_required
+from django.contrib.auth.decorators import login_required
+from .decorators import role_required
+
+
 
 def login_view(request):
     # Redirect to SSO login (placeholder)
-    sso_login = f"{settings.SSO_HOSTNAME}{settings.SSO_LOGIN_URI}"
-    return redirect(sso_login)
+    # sso_login = f"{settings.SSO_HOSTNAME}{settings.SSO_LOGIN_URI}"
+    # return redirect(sso_login)
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+
+            # Determine role from Django group
+            groups = list(user.groups.values_list('name', flat=True))
+            role = groups[0] if groups else 'VIEWER'
+
+            # Store session details
+            request.session['USER_ROLE'] = role
+            request.session['USER_NAME'] = user.get_full_name() or user.username
+            request.session['USER_ID'] = user.username
+
+            messages.success(request, f"Welcome, {user.username}! Role: {role}")
+            return redirect('anthology:drafts')
+        else:
+            messages.error(request, "Invalid username or password.")
+    return render(request, 'anthology/login.html')
+
+
+def logout_view(request):
+    logout(request)
+    messages.success(request, "Logged out successfully.")
+    return redirect('anthology:login')
 
 def login_callback(request):
     # Placeholder SAML callback: production must validate SAMLResponse signature
@@ -25,13 +68,13 @@ def login_callback(request):
     request.session['USER_REGIONS'] = []
     request.session['USER_SITES'] = []
     return redirect('anthology:reports')
-
+'''
 def logout_view(request):
     request.session.flush()
     sso_logout = f"{settings.SSO_HOSTNAME}{settings.SSO_LOGOUT_URI}"
-    return redirect(sso_logout)
+    return redirect(sso_logout)  '''
 
-
+@login_required(login_url='anthology:login')
 def reports_list(request):
     """
     Show reports in reverse chronological order with filters:
@@ -84,14 +127,14 @@ def reports_list(request):
     return render(request, 'anthology/reports.html', context)
 
 
-
+@role_required(['MANUFACTURER'])
 def report_detail(request, report_id):
     report = get_object_or_404(FinalReport, pk=report_id)
     # create a signed URL or proxy the blob; here we create blob url (SAS must be appended)
     blob_url = azure_blob.get_blob_url(report.filename, report_type='final')
     return render(request, 'anthology/report_detail.html', {'report': report, 'blob_url': blob_url})
 
-
+@login_required(login_url='anthology:login')
 def drafts_list(request):
     role = request.session.get('USER_ROLE')
     if role not in ('ADMIN', 'APPROVER'):
@@ -123,21 +166,100 @@ def drafts_list(request):
 
     return render(request, 'anthology/drafts.html', {'drafts': draft_data})
 
-
+@role_required(['ADMIN', 'APPROVER'])
 def approval_review(request, draft_id):
+    """QA Approver reviews draft report — select recipients and pass/fail outcome."""
     role = request.session.get('USER_ROLE')
     if role not in ('ADMIN', 'APPROVER'):
         return HttpResponseForbidden("Forbidden")
+
     draft = get_object_or_404(DraftReport, pk=draft_id)
+
+    # Step 1: GET request → show approval dialog with LDAP-based recipient list
+    if request.method == 'GET':
+        try:
+            site_recipients = get_site_members(draft.site) or []
+            region_recipients = get_region_members(draft.region) or []
+        except Exception as e:
+            print(f"LDAP fetch error: {e}")
+            site_recipients, region_recipients = [], []
+
+        # merge and remove duplicates
+        default_emails = sorted(set(site_recipients + region_recipients))
+        mail_list = ", ".join(default_emails) if default_emails else settings.DEFAULT_FROM_EMAIL
+
+        return render(
+            request,
+            'anthology/approvals.html',
+            {'draft': draft, 'default_mail_list': mail_list},
+        )
+
+    # Step 2: POST request → save approval + update FinalReport + send email
     if request.method == 'POST':
-        # a minimal placeholder to record approval - expand validation in production
-        from .models import Approval
         passed = request.POST.get('passed') == 'pass'
-        Approval.objects.update_or_create(report=draft, defaults={
-            'passed': passed,
-            'approved_by': request.session.get('USER_ID', 'dev.user'),
-            'approved_on': __import__('django.utils.timezone').utils.timezone.now()
-        })
+        recipients = request.POST.get('mail_recipients', '').strip()
+
+        approval, _ = Approval.objects.update_or_create(
+            report=draft,
+            defaults={
+                'passed': passed,
+                'approved_by': request.session.get('USER_ID', 'dev.user'),
+                'approved_on': timezone.now(),
+                'mail_recipients': recipients,
+            },
+        )
+
+        # Update or create FinalReport entry
+        FinalReport.objects.update_or_create(
+            study_id=draft.study_id,
+            site=draft.site,
+            defaults={
+                'filename': draft.filename.replace("draft", "final"),
+                'region': draft.region,
+                'batch': draft.batch,
+                'product': draft.product,
+                'passed': passed,
+                'approved_by': approval.approved_by,
+                'approved_on': approval.approved_on,
+                'start_date': draft.start_date,
+                'end_date': draft.end_date,
+            },
+        )
+
+        # Send notification email
+        if recipients:
+            try:
+                email_list = [e.strip() for e in recipients.split(',') if e.strip()]
+                subject = f"[{draft.study_id}] Report {'PASSED ✅' if passed else 'FAILED ❌'}"
+                message = (
+                    f"Report: {draft.filename}\n"
+                    f"Study: {draft.study_id}\n"
+                    f"Site: {draft.site}\n"
+                    f"Region: {draft.region}\n"
+                    f"Status: {'PASSED ✅' if passed else 'FAILED ❌'}\n"
+                    f"Approved by: {approval.approved_by}\n"
+                    f"Date: {approval.approved_on.strftime('%Y-%m-%d %H:%M')}"
+                )
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, email_list, fail_silently=True)
+            except Exception as e:
+                print(f"Email sending failed: {e}")
+
+        # Redirect back to drafts list
         return redirect('anthology:drafts')
-    return render(request, 'anthology/approvals.html', {'draft': draft})
+    
+
+
+@login_required(login_url='anthology:login')
+@role_required(['ADMIN', 'APPROVER'])
+def processing_logs(request):
+    """Show processing or approval activity logs."""
+    # Temporary placeholder logs — later this can pull from DB or audit table
+    logs = [
+        {"timestamp": "2025-11-02 10:22:34", "action": "Draft ST001 approved", "user": "approver_user"},
+        {"timestamp": "2025-11-02 09:55:11", "action": "Final report uploaded", "user": "admin_user"},
+        {"timestamp": "2025-11-01 17:12:08", "action": "Draft ST002 failed QA", "user": "approver_user"},
+    ]
+    return render(request, 'anthology/logs.html', {"logs": logs})
+
+
 

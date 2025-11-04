@@ -1,22 +1,32 @@
 {% extends "anthology/base.html" %}
 {% block content %}
-<h3>Review Draft {{ draft.id }}</h3>
-<p><b>Study:</b> {{ draft.study_id }} &nbsp; <b>Site:</b> {{ draft.site }}</p>
+<div class="container mt-4">
+  <h4>Review Draft Report — {{ draft.filename }}</h4>
+  <p><strong>Study:</strong> {{ draft.study_id }} | <strong>Site:</strong> {{ draft.site }} | <strong>Region:</strong> {{ draft.region }}</p>
 
-<form method="post">
-  {% csrf_token %}
-  <div class="mb-3">
-    <label class="form-label">Decision</label><br>
-    <div class="form-check form-check-inline">
-      <input class="form-check-input" type="radio" id="pass" name="passed" value="pass">
-      <label class="form-check-label" for="pass">Pass</label>
+  <form method="post" id="approvalForm">
+    {% csrf_token %}
+    <!-- Step 1: Mail Recipients -->
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Step 1: Edit Mail List</div>
+      <div class="card-body">
+        <textarea name="mail_recipients" class="form-control" rows="3"
+          placeholder="Enter comma-separated emails">
+          {{ default_mail_list|default:"" }}
+        </textarea>
+        <div class="form-text">These recipients were pre-fetched from LDAP. You can modify them if needed.</div>
+      </div>
     </div>
-    <div class="form-check form-check-inline">
-      <input class="form-check-input" type="radio" id="fail" name="passed" value="fail">
-      <label class="form-check-label" for="fail">Fail</label>
+
+    <!-- Step 2: Approve or Reject -->
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Step 2: Approval Decision</div>
+      <div class="card-body">
+        <button type="submit" name="passed" value="pass" class="btn btn-success me-2">Pass ✅</button>
+        <button type="submit" name="passed" value="fail" class="btn btn-danger">Fail ❌</button>
+      </div>
     </div>
-  </div>
-  <button type="submit" class="btn btn-success">Confirm</button>
-  <a href="{% url 'anthology:drafts' %}" class="btn btn-secondary">Cancel</a>
-</form>
+  </form>
+</div>
 {% endblock %}
+
