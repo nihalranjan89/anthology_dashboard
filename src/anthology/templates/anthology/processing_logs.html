@@ -1,0 +1,78 @@
+{% extends "anthology/base.html" %}
+{% block content %}
+
+<h3>Processing Reports</h3>
+
+<input class="form-control mb-3" id="searchBox" placeholder="Search...">
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Timestamp</th><th>Region</th><th>Site</th><th>Study</th>
+      <th>Product</th><th>Response</th><th>State</th><th>Text</th>
+    </tr>
+  </thead>
+  <tbody id="logTable"></tbody>
+</table>
+
+<div id="endMessage" class="text-center text-muted"></div>
+
+<script>
+let page = 1;
+let loading = false;
+let hasNext = true;
+
+async function loadLogs(reset=false) {
+  if(!hasNext || loading) return;
+  loading = true;
+
+  if(reset) {
+    page = 1;
+    document.getElementById("logTable").innerHTML = "";
+    hasNext = true;
+  }
+
+  const search = document.getElementById("searchBox").value;
+  const res = await fetch(`/logs/processing/data/?page=${page}&search=${search}`);
+  const data = await res.json();
+
+  if(data.logs.length === 0 && page == 1) {
+    document.getElementById("endMessage").innerHTML = "No Records";
+  }
+
+  data.logs.forEach(log => {
+    document.getElementById("logTable").innerHTML += `
+      <tr>
+        <td>${log.timestamp}</td>
+        <td>${log.region}</td>
+        <td>${log.site}</td>
+        <td>${log.study}</td>
+        <td>${log.product}</td>
+        <td>${log.response}</td>
+        <td>${log.state}</td>
+        <td>${log.text}</td>
+      </tr>`;
+  });
+
+  hasNext = data.has_next;
+  if(!hasNext) {
+    document.getElementById("endMessage").innerHTML = "End of Records";
+  }
+
+  loading = false;
+  page++;
+}
+
+window.addEventListener("scroll", () => {
+  if(window.innerHeight + window.scrollY >= document.body.offsetHeight - 50) {
+    loadLogs();
+  }
+});
+
+document.getElementById("searchBox").addEventListener("input", () => loadLogs(true));
+
+// initial load
+loadLogs();
+
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "anthology/base.html" %}
+{% block content %}
+
+<h3>Access Reports</h3>
+
+<table class="table table-bordered">
+  <thead class="table-light">
+    <tr>
+      <th>Timestamp</th>
+      <th>User</th>
+      <th>Action</th>
+      <th>Subject</th>
+    </tr>
+  </thead>
+  <tbody id="logBody">
+    {% for log in logs %}
+      <tr>
+        <td>{{ log.timestamp }}</td>
+        <td>{{ log.user }}</td>
+        <td>{{ log.action }}</td>
+        <td>{{ log.subject }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p id="endMessage" class="text-muted text-center d-none">End of Records</p>
+
+<script>
+let page = 1;
+let loading = false;
+
+window.onscroll = async function() {
+  if (loading) return;
+
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+    loading = true;
+    page += 1;
+
+    const res = await fetch(`/logs/access?page=${page}`);
+    const data = await res.text();
+
+    if (data.trim() === "") {
+      document.getElementById("endMessage").classList.remove("d-none");
+    } else {
+      document.getElementById("logBody").insertAdjacentHTML('beforeend', data);
+      loading = false;
+    }
+  }
+};
+</script>
+
+{% endblock %}

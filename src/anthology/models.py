@@ -55,25 +55,32 @@ class FinalReport(models.Model):
     def __str__(self):
         return f"{self.study_id} - {self.site}"
  
+# models.py
 class ProcessLog(models.Model):
-    timestamp = models.DateTimeField()
-    study = models.CharField(max_length=255, null=True, blank=True)
-    region = models.CharField(max_length=255, null=True, blank=True)
-    site = models.CharField(max_length=255, null=True, blank=True)
-    product = models.CharField(max_length=255, null=True, blank=True)
-    response = models.CharField(max_length=255, null=True, blank=True)
-    state = models.CharField(max_length=255, null=True, blank=True)
-    text = models.TextField(null=True, blank=True)
- 
-    def __str__(self):
-        return f"{self.timestamp} - {self.study or 'N/A'}"
+    timestamp = models.DateTimeField(auto_now_add=True)
+    region = models.CharField(max_length=100,null=True, blank=True)
+    site = models.CharField(max_length=100,null=True, blank=True)
+    study = models.CharField(max_length=100,null=True, blank=True)
+    product = models.CharField(max_length=100,null=True, blank=True)
+    response = models.CharField(max_length=50,null=True, blank=True)  # e.g. Draft ID XX
+    state = models.CharField(max_length=20,null=True, blank=True)     # PASSED/FAILED
+    text = models.TextField(null=True, blank=True)                   # audit description
+    updated_by = models.CharField(max_length=50,default="system")
+
+    class Meta:
+        ordering = ['-timestamp']
+
  
 class AccessLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
-    user_id = models.CharField(max_length=255)
-    action = models.CharField(max_length=32)
-    subject = models.CharField(max_length=1024)
- 
+    user = models.CharField(max_length=150,null=True, blank=True)   # username of actor
+    action = models.CharField(max_length=200,null=True, blank=True) # e.g., "Viewed Draft", "Approved Report"
+    subject = models.CharField(max_length=300,null=True, blank=True)  # e.g., "Draft ST123"
+
+    class Meta:
+        ordering = ['-timestamp']
+
     def __str__(self):
-        return f"{self.timestamp} - {self.user_id} - {self.action}"
+        return f"{self.timestamp} - {self.user} - {self.action}"
+
  

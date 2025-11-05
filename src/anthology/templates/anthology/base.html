@@ -33,12 +33,19 @@
         </li>
         {% endif %}
 
-        <!-- 🪵 Logs (Visible only to Admin & Approver) -->
-        {% if request.session.USER_ROLE in 'ADMIN,APPROVER' %}
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'anthology:processing_logs' %}">Logs</a>
-        </li>
-        {% endif %}
+{% if request.session.USER_ROLE in "ADMIN APPROVER" %}
+<li class="nav-item">
+  <a class="nav-link" href="{% url 'anthology:processing_logs' %}">Process Logs</a>
+</li>
+{% endif %}
+
+{% if request.session.USER_ROLE == "ADMIN" %}
+<li class="nav-item">
+  <a class="nav-link" href="{% url 'anthology:access_logs' %}">Access Logs</a>
+</li>
+{% endif %}
+
+
       </ul>
 
       <!-- 👤 USER INFO / LOGIN-LOGOUT SECTION -->

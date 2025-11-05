@@ -479,19 +479,6 @@ def approval_review(request, draft_id):
     
 
 
-@login_required(login_url='anthology:login')
-@role_required(['ADMIN', 'APPROVER'])
-def processing_logs(request):
-    """Show processing or approval activity logs."""
-    # Temporary placeholder logs — later this can pull from DB or audit table
-    logs = [
-        {"timestamp": "2025-11-02 10:22:34", "action": "Draft ST001 approved", "user": "approver_user"},
-        {"timestamp": "2025-11-02 09:55:11", "action": "Final report uploaded", "user": "admin_user"},
-        {"timestamp": "2025-11-01 17:12:08", "action": "Draft ST002 failed QA", "user": "approver_user"},
-    ]
-    return render(request, 'anthology/logs.html', {"logs": logs})
-
-
 @role_required(['ADMIN', 'APPROVER'])
 def review_draft(request, draft_id):
     """Review a specific draft report."""
@@ -564,6 +551,11 @@ def draft_detail(request, draft_id):
         return HttpResponseForbidden("Forbidden")
 
     draft = get_object_or_404(DraftReport, pk=draft_id)
+    AccessLog.objects.create(
+        user=role,
+        action="Viewed Draft",
+        subject=f"{draft.study_id} - {draft.filename}"
+    )
 
     if hasattr(draft, 'approval'):
         status = "✅ Passed" if draft.approval.passed else "❌ Failed"
@@ -587,7 +579,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponseForbidden
 import json
-from .models import DraftReport, Approval, FinalReport, ProcessLog
+from .models import DraftReport, Approval, FinalReport, ProcessLog, AccessLog
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 
@@ -649,6 +641,13 @@ def approval_review(request, draft_id):
             text=f"Report '{draft.filename}' was {'approved' if passed else 'rejected'} by {user_id}. Comments: {comments}",
         )
 
+        AccessLog.objects.create(
+        user=request.session.get('USER_ID', 'system'),
+        action=f"{'Approved' if passed else 'Rejected'} Draft",
+        subject=f"{draft.study_id}"
+    )
+
+
         # ✅ Optional: Send notification email
         if recipients:
             try:
@@ -675,4 +674,56 @@ def approval_review(request, draft_id):
         print(f"⚠️ Error in approval_review: {e}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+# Processing Logs View
+from django.core.paginator import Paginator
+from django.db.models import Q
 
+@login_required(login_url='anthology:login')
+@role_required(['ADMIN', 'APPROVER'])
+def processing_logs(request):
+    return render(request, "anthology/processing_logs.html")
+
+@login_required(login_url='anthology:login')
+@role_required(['ADMIN', 'APPROVER'])
+def processing_logs_data(request):
+    page = int(request.GET.get("page", 1))
+    search = request.GET.get("search", "")
+    
+    logs = ProcessLog.objects.all()
+
+    # Simple search filter
+    if search:
+        logs = logs.filter(
+            Q(region__icontains=search) |
+            Q(site__icontains=search) |
+            Q(study__icontains=search) |
+            Q(product__icontains=search) |
+            Q(text__icontains=search) |
+            Q(state__icontains=search)
+        )
+
+    paginator = Paginator(logs, 30)  # 30 logs per scroll
+    page_obj = paginator.get_page(page)
+
+    data = [{
+        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M"),
+        "region": log.region,
+        "site": log.site,
+        "study": log.study,
+        "product": log.product,
+        "response": log.response,
+        "state": log.state,
+        "text": log.text,
+    } for log in page_obj]
+
+    return JsonResponse({
+        "logs": data,
+        "has_next": page_obj.has_next()
+    })
+
+
+@login_required(login_url='anthology:login')
+@role_required(['ADMIN'])   # ONLY ADMIN
+def access_logs(request):
+    logs = AccessLog.objects.all()[:200]  # return first 200 to simulate endless scroll
+    return render(request, "anthology/access_logs.html", {"logs": logs})

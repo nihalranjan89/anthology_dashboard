@@ -16,6 +16,11 @@ urlpatterns = [
     path('drafts/', views.drafts_list, name='drafts'),
     path('approvals/review/<int:draft_id>/', views.approval_review, name='approval_review'),
     path('', views.reports_list, name='home'),
-    path('logs/processing/', views.processing_logs, name='processing_logs'),
     path('drafts/review/<int:draft_id>/', views.review_draft, name='review_draft'),
+    # Processing logs URLs
+    path("logs/processing/", views.processing_logs, name="processing_logs"),
+    path("logs/processing/data/", views.processing_logs_data, name="processing_logs_data"),
+    path('logs/access', views.access_logs, name="access_logs"),
+
+
 ]
