@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import environ
 
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(DEBUG=(bool, False))
@@ -23,12 +24,14 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'anthology.middleware.DisableBrowserCacheMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware'
+    
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -121,4 +124,8 @@ ACCESS_APPROVER_EMAIL = env('ACCESS_APPROVER_EMAIL', default='')
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Redirect URL after login
+LOGIN_REDIRECT_URL = '/reports/'
+
 

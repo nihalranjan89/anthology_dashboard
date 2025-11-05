@@ -104,27 +104,22 @@ def metadata(request):
  
     return HttpResponse(metadata, content_type="text/xml")
 
-def login_view(request):
-    # Redirect to SSO login (placeholder)
-    # sso_login = f"{settings.SSO_HOSTNAME}{settings.SSO_LOGIN_URI}"
-    # return redirect(sso_login)
-    # Always clear any existing session before showing login form
 
-    if request.user.is_authenticated:
-        logout(request)
-        request.session.flush()
+def login_view(request):
+    # ✅ If user already logged in, skip login form
+    if request.user.is_authenticated and request.session.get("USER_ID"):
+        return redirect('anthology:reports')
 
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
         user = authenticate(request, username=username, password=password)
 
-        if user is not None:
+        if user:
             login(request, user)
 
-            # Determine role from Django groups with priority
+            # Determine user role
             groups = list(user.groups.values_list('name', flat=True))
-            
             if 'ADMIN' in groups:
                 role = 'ADMIN'
             elif 'APPROVER' in groups:
@@ -134,17 +129,23 @@ def login_view(request):
             else:
                 role = 'VIEWER'
 
-            # Store session details
+            # Store session
             request.session['USER_ROLE'] = role
             request.session['USER_NAME'] = user.get_full_name() or user.username
             request.session['USER_ID'] = user.username
 
             messages.success(request, f"Welcome, {user.username}! Role: {role}")
-            return redirect('anthology:drafts')
+
+            # ✅ Important: Redirect after POST (avoids ERR_CACHE_MISS)
+            return redirect('anthology:reports')
+
         else:
             messages.error(request, "Invalid username or password.")
-    return render(request, 'anthology/login.html')
+            # ✅ Redirect after invalid POST too (avoid reload issue)
+            return redirect('anthology:login')
 
+    # GET — render login form
+    return render(request, 'anthology/login.html')
 
 def logout_view(request):
     logout(request) # Django logout
