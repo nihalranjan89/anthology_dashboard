@@ -1,8 +1,8 @@
 {% extends "anthology/base.html" %}
 {% block content %}
-
+ 
 <h3 class="mb-3">Pending Drafts</h3>
-
+ 
 <table class="table table-bordered align-middle">
   <thead class="table-light">
     <tr>
@@ -37,22 +37,25 @@
       <td>{{ draft.start_date }}</td>
       <td>{{ draft.end_date }}</td>
       <td>
-        {% if draft.pdf_url %}
+        <a href="{% url 'anthology:draft_detail' draft.id %}" class="btn btn-sm btn-outline-primary">
+          View Deatils
+        </a>
+        {% comment %} {% if draft.pdf_url %}
           <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#pdfModal{{ draft.id }}">
             View PDF
           </button>
         {% else %}
           <span class="text-muted">No file</span>
         {% endif %}
-
+ 
         {% if draft.is_pending %}
           <button class="btn btn-sm btn-success ms-1" onclick="openApprovalDialog('{{ draft.id }}')">
             Approve
           </button>
-        {% endif %}
+        {% endif %} {% endcomment %}
       </td>
     </tr>
-
+ 
     <!-- PDF Modal -->
     {% if draft.pdf_url %}
     <div class="modal fade" id="pdfModal{{ draft.id }}" tabindex="-1" aria-hidden="true">
@@ -76,7 +79,7 @@
     {% endfor %}
   </tbody>
 </table>
-
+ 
 <!-- Approval Modal -->
 <div class="modal fade" id="approvalModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -88,7 +91,7 @@
       <div class="modal-body">
         <p class="mb-2 fw-semibold">Edit Recipient List</p>
         <input type="text" id="recipients" class="form-control" placeholder="Enter comma-separated emails">
-
+ 
         <div class="mt-4 d-flex justify-content-around">
           <button class="btn btn-outline-success" onclick="submitApproval(true)">Pass</button>
           <button class="btn btn-outline-danger" onclick="submitApproval(false)">Fail</button>
@@ -97,28 +100,28 @@
     </div>
   </div>
 </div>
-
+ 
 <script>
   let currentDraftId = null;
-
+ 
   function openApprovalDialog(draftId) {
     currentDraftId = draftId;
     const modal = new bootstrap.Modal(document.getElementById('approvalModal'));
     modal.show();
   }
-
+ 
   async function submitApproval(passed) {
     const recipients = document.getElementById('recipients').value
       .split(',')
       .map(r => r.trim())
       .filter(r => r);
-
+ 
     const response = await fetch(`/approvals/review/${currentDraftId}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ passed, recipients })
     });
-
+ 
     if (response.ok) {
       alert('Approval submitted successfully!');
       location.reload();
@@ -127,5 +130,6 @@
     }
   }
 </script>
-
+ 
 {% endblock %}
+ 

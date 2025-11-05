@@ -1,0 +1,373 @@
+{% extends "anthology/base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-3">
+  <!-- Header Row -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <a href="{% url 'anthology:drafts' %}" class="btn btn-outline-secondary">← Back</a>
+
+    {% if pdf_url %}
+      <a href="{{ pdf_url }}" download class="btn btn-outline-primary">⬇️ Download PDF</a>
+    {% else %}
+      <button class="btn btn-outline-secondary" disabled>No Document Available</button>
+    {% endif %}
+  </div>
+
+  <div class="row">
+    <!-- Left: PDF Preview -->
+    <div class="col-md-8">
+      {% if pdf_url %}
+        <iframe src="{{ pdf_url }}" width="100%" height="700px" style="border:none;"></iframe>
+      {% else %}
+        <div class="alert alert-warning text-center py-5">
+            <strong>Document not available</strong>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Right: Details Table -->
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Report Information</h5>
+
+          <table class="table table-sm table-borderless mb-4">
+            <tr><th>Region:</th><td>{{ draft.region }}</td></tr>
+            <tr><th>Site:</th><td>{{ draft.site }}</td></tr>
+            <tr><th>Batch:</th><td>{{ draft.batch }}</td></tr>
+            <tr><th>Product:</th><td>{{ draft.product }}</td></tr>
+            <tr><th>Start Date:</th><td>{{ draft.start_date }}</td></tr>
+            <tr><th>End Date:</th><td>{{ draft.end_date }}</td></tr>
+          </table>
+
+
+{% if is_pending %}
+<div class="mb-3">
+<label class="form-label fw-semibold card-title mb-3">Comments</label>
+<textarea id="comments" class="form-control" rows="4" placeholder="Enter your comments..."></textarea>
+</div>
+
+<button class="btn btn-primary w-100" onclick="openApprovalDialog()">
+    Approve
+</button>
+{% else %}
+<button class="btn btn-secondary w-100 mt-3" disabled>
+    Already Reviewed
+</button>
+{% endif %}
+
+
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Step 1: Pass/Fail Selection Modal -->
+<!-- Step 1: Pass/Fail + Edit Email Modal -->
+<div class="modal fade" id="passFailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Approve Draft Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- Pass / Fail Radio Buttons -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Select Result</label><br>
+          <input type="radio" name="decision" value="pass"> ✅ Pass &nbsp;&nbsp;
+          <input type="radio" name="decision" value="fail"> ❌ Fail
+        </div>
+
+        <!-- Edit Mail List -->
+        <button class="btn btn-outline-primary w-100 mb-3" onclick="openRecipientModal()">
+          Edit Mail List
+        </button>
+
+        <!-- Buttons -->
+        <div class="d-flex justify-content-between">
+          <button class="btn btn-secondary" onclick="cancelApproval()">Cancel</button>
+          <button class="btn btn-success" onclick="confirmDecision()">Confirm</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Step 2: Recipient Modal -->
+<div class="modal fade" id="recipientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit Recipient List</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="recipientList" class="mb-3"></div>
+        <button class="btn btn-outline-primary btn-sm w-100" onclick="openAddEmailModal()">Add Email</button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="backToPassFail()">Back</button>
+        <button class="btn btn-primary" onclick="openConfirmModal()">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Step 3: Add Email Modal -->
+<div class="modal fade" id="addEmailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Email</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="email" id="emailInput" class="form-control" placeholder="Enter email address">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAddEmailModal()">Back</button>
+        <button class="btn btn-primary" onclick="addEmail()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Step 4: Final Confirmation Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Approval</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Decision:</strong> <span id="confirmDecision" class="badge"></span></p>
+        <ul id="confirmRecipientList" class="list-unstyled mt-3"></ul>
+        <p class="text-muted small">Are you sure you want to submit this approval?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="backToRecipients()">Back</button>
+        <button class="btn btn-success" onclick="submitApproval()">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+  let currentDraftId = '{{ draft.id }}';
+  let approvalDecision = null;
+  let recipients = [];
+  let passFailModalInstance, recipientModalInstance, addEmailModalInstance, confirmModalInstance;
+  
+  let defaultRecipients = [
+    "qa_team@example.com",
+    "manufacturing@example.com",
+    "compliance@example.com",
+    "manager@example.com"
+    ];
+  let extraRecipients = [];
+
+  function openRecipientModal() {
+  recipients = [...defaultRecipients, ...extraRecipients];
+  renderRecipientList();
+  recipientModalInstance.show();
+}
+
+function addEmail() {
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Enter valid email');
+  if (recipients.includes(email)) return alert('Already added');
+  extraRecipients.push(email);  // 👈 track only user-added ones
+  recipients = [...defaultRecipients, ...extraRecipients];
+  addEmailModalInstance.hide();
+  renderRecipientList();
+}
+
+async function submitApproval(passed) {
+  const comments = document.getElementById('comments').value.trim();
+  const res = await fetch(`/approvals/review/${currentDraftId}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify({ passed, recipients: [...defaultRecipients, ...extraRecipients], comments })
+  });
+  if (res.ok) {
+    alert('Approval submitted successfully!');
+    location.reload();
+  } else {
+    alert('Error submitting approval.');
+  }
+}
+
+  document.addEventListener('DOMContentLoaded', () => {
+    passFailModalInstance = new bootstrap.Modal(document.getElementById('passFailModal'));
+    recipientModalInstance = new bootstrap.Modal(document.getElementById('recipientModal'));
+    addEmailModalInstance = new bootstrap.Modal(document.getElementById('addEmailModal'));
+    confirmModalInstance = new bootstrap.Modal(document.getElementById('confirmModal'));
+  });
+
+  function openApprovalDialog() {
+    recipients = [];
+    approvalDecision = null;
+    passFailModalInstance.show();
+  }
+
+  function selectDecision(passed) {
+    approvalDecision = passed;
+    passFailModalInstance.hide();
+    setTimeout(() => {
+      renderRecipientList();
+      recipientModalInstance.show();
+    }, 300);
+  }
+
+function renderRecipientList() {
+  const listDiv = document.getElementById('recipientList');
+
+  listDiv.innerHTML = "";
+
+  recipients.forEach((email, i) => {
+    const isDefault = defaultRecipients.includes(email); // identify system emails
+
+    listDiv.innerHTML += `
+      <div class="d-flex justify-content-between align-items-center mb-2 border p-2 rounded">
+        <span>${email}</span>
+        ${
+          isDefault 
+          ? `<span class="badge bg-secondary">Locked</span>`
+          : `<button class="btn btn-sm btn-outline-danger" onclick="removeRecipient(${i})">
+               Remove
+             </button>`
+        }
+      </div>
+    `;
+  });
+
+  if (recipients.length === 0) {
+    listDiv.innerHTML = '<p class="text-muted small">No recipients added yet.</p>';
+  }
+}
+
+
+  function openAddEmailModal() {
+    document.getElementById('emailInput').value = '';
+    addEmailModalInstance.show();
+  }
+
+  function closeAddEmailModal() {
+    addEmailModalInstance.hide();
+  }
+
+  function addEmail() {
+    const email = document.getElementById('emailInput').value.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Enter valid email');
+    if (recipients.includes(email)) return alert('Already added');
+    recipients.push(email);
+    addEmailModalInstance.hide();
+    renderRecipientList();
+  }
+
+function removeRecipient(i) {
+  const email = recipients[i];
+  if (defaultRecipients.includes(email)) {
+    return; // block removal
+  }
+
+  // Remove only user-added ones
+  extraRecipients = extraRecipients.filter(e => e !== email);
+  recipients = [...defaultRecipients, ...extraRecipients];
+  renderRecipientList();
+}
+
+
+  function backToPassFail() {
+    recipientModalInstance.hide();
+    setTimeout(() => passFailModalInstance.show(), 300);
+  }
+
+  function openConfirmModal() {
+    recipientModalInstance.hide();
+    setTimeout(() => {
+      const confirmDecision = document.getElementById('confirmDecision');
+      confirmDecision.textContent = approvalDecision ? 'Pass' : 'Fail';
+      confirmDecision.className = approvalDecision ? 'badge bg-success' : 'badge bg-danger';
+      document.getElementById('confirmRecipientList').innerHTML =
+        recipients.length ? recipients.map(e => `<li>• ${e}</li>`).join('') : '<li class="text-muted">No recipients</li>';
+      confirmModalInstance.show();
+    }, 300);
+  }
+
+  function backToRecipients() {
+    confirmModalInstance.hide();
+    setTimeout(() => recipientModalInstance.show(), 300);
+  }
+
+  async function submitApproval() {
+    const comments = document.getElementById('comments').value.trim();
+    const res = await fetch(`/approvals/review/${currentDraftId}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ passed: approvalDecision, recipients, comments })
+    });
+    if (res.ok) {
+      alert('Approval submitted successfully!');
+      location.reload();
+    } else {
+      alert('Error submitting approval.');
+    }
+  }
+
+  function openConfirmModal() {
+    recipientModalInstance.hide();
+    setTimeout(() => {
+      const confirmDecision = document.getElementById('confirmDecision');
+      confirmDecision.textContent = approvalDecision ? 'Pass' : 'Fail';
+      confirmDecision.className = approvalDecision ? 'badge bg-success' : 'badge bg-danger';
+      document.getElementById('confirmRecipientList').innerHTML =
+        recipients.length ? recipients.map(e => `<li>• ${e}</li>`).join('') : '<li class="text-muted">No recipients</li>';
+      confirmModalInstance.show();
+    }, 300);
+}
+
+
+
+
+  function getCookie(name) {
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+      const cookie = c.trim();
+      if (cookie.startsWith(name + '=')) return decodeURIComponent(cookie.substring(name.length + 1));
+    }
+    return null;
+  }
+
+  function openApprovalDialog() {
+    approvalDecision = null;
+    passFailModalInstance.show();
+}
+
+function cancelApproval() {
+    passFailModalInstance.hide();
+}
+
+function confirmDecision() {
+    const selected = document.querySelector('input[name="decision"]:checked');
+    if (!selected) return alert("Please select Pass or Fail first");
+
+    approvalDecision = selected.value === "pass";
+    passFailModalInstance.hide();
+    openConfirmModal();   // go to confirm modal next
+}
+
+
+
+</script>
+
+{% endblock %}
