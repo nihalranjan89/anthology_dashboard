@@ -71,7 +71,7 @@ def login_saml(request):
     auth = init_saml_auth(request)
     return redirect(auth.login())
  
- 
+'''
 def acs(request):
     """
     Assertion Consumer Service — handles the response from IdP
@@ -90,7 +90,63 @@ def acs(request):
     request.session["USER_ROLE"] = saml_attrs.get("memberOf", ["VIEWER"])[0]
     request.session["USER_EMAIL"] = saml_attrs.get("emailAddress", [""])[0]
  
+    return redirect("anthology:reports")'''
+
+def acs(request):
+    """
+    Assertion Consumer Service — handles the response from IdP
+    """
+    auth = init_saml_auth(request)
+    auth.process_response()
+    errors = auth.get_errors()
+
+    if errors:
+        return HttpResponse(f"SAML Error: {errors}")
+
+    # Extract user data from SAML response
+    saml_attrs = auth.get_attributes()
+    request.session["USER_ID"] = auth.get_nameid()
+    request.session["USER_NAME"] = saml_attrs.get("cn", ["Unknown"])[0]
+    request.session["USER_EMAIL"] = saml_attrs.get("emailAddress", [""])[0]
+
+    member_of = saml_attrs.get("memberOf", [])
+
+    # 🔹 Load permission suffixes from settings
+    region_suffix = settings.PERMISSION_SUFFIX_REGION
+    site_suffix = settings.PERMISSION_SUFFIX_SITE  # make sure this exists in your .env and settings
+    qa_suffix = settings.PERMISSION_SUFFIX_QA
+
+    # 🔹 Identify regions, sites, and role
+    region_scope = []
+    site_scope = []
+    role = "VIEWER"
+
+    for entry in member_of:
+        entry_upper = entry.upper()
+
+        if region_suffix in entry_upper:
+            region_scope.append(entry.split(region_suffix)[0].strip())
+
+        if site_suffix in entry_upper:
+            site_scope.append(entry.split(site_suffix)[0].strip())
+
+        if qa_suffix in entry_upper:
+            role = "APPROVER"
+        elif "ADMIN" in entry_upper:
+            role = "ADMIN"
+        elif "MANUFACTURER" in entry_upper or "SITE" in entry_upper:
+            role = "MANUFACTURER"
+
+    # Store in session
+    request.session["USER_ROLE"] = role
+    request.session["USER_REGIONS"] = region_scope
+    request.session["USER_SITES"] = site_scope
+
+    print(f"✅ Login Successful: {request.session['USER_NAME']} ({role})")
+    print(f"Regions: {region_scope}, Sites: {site_scope}")
+
     return redirect("anthology:reports")
+
  
  
 def metadata(request):
@@ -133,6 +189,11 @@ def login_view(request):
             request.session['USER_ROLE'] = role
             request.session['USER_NAME'] = user.get_full_name() or user.username
             request.session['USER_ID'] = user.username
+
+            # 🧪 Local simulation for manufacturer access
+            if role == 'MANUFACTURER':
+                request.session['USER_REGIONS'] = ['USA-1']
+                request.session['USER_SITES'] = ['A']
 
             messages.success(request, f"Welcome, {user.username}! Role: {role}")
 
@@ -178,6 +239,7 @@ def logout_view(request):
     sso_logout = f"{settings.SSO_HOSTNAME}{settings.SSO_LOGOUT_URI}"
     return redirect(sso_logout)  '''
 
+'''
 @login_required(login_url='anthology:login')
 def reports_list(request):
     """
@@ -258,7 +320,120 @@ def reports_list(request):
         'approved_by': approved_by,
         'approved_on': approved_on,  
     }
+    return render(request, 'anthology/reports.html', context)'''
+
+@login_required(login_url='anthology:login')
+def reports_list(request):
+    """
+    Show reports in reverse chronological order with filters:
+      - Site
+      - Date Range (start_date / end_date)
+      - Status (Draft / Final)
+      - Pass/Fail (for Final only)
+      - Restricted access for MANUFACTURER roles
+    """
+    site = request.GET.get('site', '').strip()
+    region = request.GET.get('region', '').strip()
+    product = request.GET.get('product', '').strip()
+    batch = request.GET.get('batch', '').strip()
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    status = request.GET.get('status', 'final').lower()      # 'draft' or 'final'
+    pass_filter = request.GET.get('pass_status', '').lower() # 'passed' or 'failed'
+    sort_field = request.GET.get('sort', '')   
+    approved_by = request.GET.get('approved_by', '').strip()
+    approved_on = request.GET.get('approved_on', '')
+
+    # Choose model based on report type
+    model = FinalReport if status == 'final' else DraftReport
+    queryset = model.objects.all()
+
+    # 🚧 Restrict Manufacturing SPOCs
+    user_role = request.session.get("USER_ROLE")
+    user_regions = request.session.get("USER_REGIONS", [])
+    user_sites = request.session.get("USER_SITES", [])
+
+    if user_role == "MANUFACTURER":
+        # Manufacturers can view only finalized reports
+        model = FinalReport
+        queryset = FinalReport.objects.all()
+
+        # Filter reports based on assigned regions/sites
+        filters = Q()
+        if user_regions:
+            filters |= Q(region__in=user_regions)
+        if user_sites:
+            filters |= Q(site__in=user_sites)
+
+        queryset = queryset.filter(filters)
+
+        # Optional: prevent query returning everything if both lists empty
+        if not user_regions and not user_sites:
+            queryset = FinalReport.objects.none()
+
+        # Force status to "final" so drafts are hidden
+        status = "final"
+
+    # 🔹 Apply filters from search fields
+    if site:
+        queryset = queryset.filter(site__icontains=site)
+    if region:
+        queryset = queryset.filter(region__icontains=region)
+    if product:
+        queryset = queryset.filter(product__icontains=product)
+    if batch:
+        queryset = queryset.filter(batch__icontains=batch)
+    if start_date:
+        queryset = queryset.filter(start_date__gte=parse_date(start_date))
+    if end_date:
+        queryset = queryset.filter(end_date__lte=parse_date(end_date))
+    if approved_by:
+        queryset = queryset.filter(approved_by__icontains=approved_by)
+    if approved_on:
+        queryset = queryset.filter(approved_on__gte=parse_date(approved_on))
+
+    # 🔹 If viewing FINAL reports, allow pass/fail filter
+    if status == 'final':
+        if pass_filter == 'passed':
+            queryset = queryset.filter(passed=True)
+        elif pass_filter == 'failed':
+            queryset = queryset.filter(passed=False)
+    else:
+        queryset = queryset.filter(approval__isnull=True)
+
+    # 🔹 Sorting
+    valid_fields = ['region', 'site', 'batch', 'product', 'start_date', 'end_date', 'approved_on', 'approved_by']
+    if sort_field.lstrip('-') in valid_fields:
+        queryset = queryset.order_by(sort_field)
+    else:
+        queryset = queryset.order_by('-approved_on' if status == 'final' else '-start_date')
+
+    # ✅ Context for frontend
+    context = {
+        'reports': queryset,
+        'selected_site': site,
+        'region': region,
+        'product': product,
+        'batch': batch,
+        'selected_status': status,
+        'start_date': start_date,
+        'end_date': end_date,
+        'pass_filter': pass_filter,
+        'approved_by': approved_by,
+        'approved_on': approved_on,
+    }
+
+    # Optional: show filter info banner for manufacturers
+    if user_role == "MANUFACTURER":
+        context["filter_info"] = {
+            "regions": user_regions,
+            "sites": user_sites
+        }
+
     return render(request, 'anthology/reports.html', context)
+
+
+
 '''
 # @role_required(['MANUFACTURER'])
 def report_detail(request, report_id):
