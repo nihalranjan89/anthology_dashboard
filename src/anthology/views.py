@@ -259,13 +259,13 @@ def reports_list(request):
         'approved_on': approved_on,  
     }
     return render(request, 'anthology/reports.html', context)
-
+'''
 # @role_required(['MANUFACTURER'])
 def report_detail(request, report_id):
     report = get_object_or_404(FinalReport, pk=report_id)
     # create a signed URL or proxy the blob; here we create blob url (SAS must be appended)
     blob_url = azure_blob.get_blob_url(report.filename, report_type='final')
-    return render(request, 'anthology/report_detail.html', {'report': report, 'blob_url': blob_url})
+    return render(request, 'anthology/report_detail.html', {'report': report, 'blob_url': blob_url})'''
 
 @require_POST
 @role_required(['ADMIN', 'APPROVER'])
@@ -333,17 +333,40 @@ def drafts_list(request):
 
     return render(request, 'anthology/drafts.html', {'drafts': draft_data})
 
-
+'''
 # @role_required(['MANUFACTURER'])
 def report_detail(request, report_id):
     report = get_object_or_404(FinalReport, pk=report_id)
     # create a signed URL or proxy the blob; here we create blob url (SAS must be appended)
     blob_url = azure_blob.get_blob_url(report.filename, report_type='final')
-    return render(request, 'anthology/report_detail.html', {'report': report, 'blob_url': blob_url})
+    return render(request, 'anthology/report_detail.html', {'report': report, 'blob_url': blob_url})'''
+
+
+@login_required(login_url='anthology:login')
+def report_detail(request, report_id):
+    """
+    Show final report details along with approval info and approver comments.
+    """
+    report = get_object_or_404(FinalReport, pk=report_id)
+    blob_url = azure_blob.get_blob_url(report.filename, report_type='final')
+
+    # Try to get the associated draft and approval info
+    approval = Approval.objects.filter(
+        report__study_id=report.study_id,
+        report__site=report.site
+    ).first()
+
+    context = {
+        'report': report,
+        'blob_url': blob_url,
+        'approval': approval,
+    }
+    return render(request, 'anthology/report_detail.html', context)
 
 
 
 
+'''
 @role_required(['ADMIN', 'APPROVER'])
 def approval_review(request, draft_id):
     """QA Approver reviews draft report — select recipients and pass/fail outcome."""
@@ -476,7 +499,7 @@ def approval_review(request, draft_id):
                 print(f"Email sending failed: {e}")
 
         # Redirect back to drafts list
-        return redirect('anthology:drafts')
+        return redirect('anthology:drafts') '''
     
 
 
@@ -486,7 +509,7 @@ def review_draft(request, draft_id):
     draft = get_object_or_404(DraftReport, pk=draft_id)
     return render(request, 'anthology/review_draft.html', {'draft': draft})
  
- 
+'''
 @csrf_exempt
 @login_required(login_url='anthology:login')
 @role_required(['ADMIN', 'APPROVER'])
@@ -510,7 +533,7 @@ def approval_review(request, draft_id):
         # Log action in AccessLog
  
         return JsonResponse({'status': 'ok'})
-    return HttpResponseForbidden()
+    return HttpResponseForbidden() '''
 
 
 # @login_required(login_url='anthology:login')

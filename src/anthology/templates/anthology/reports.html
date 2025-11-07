@@ -1,104 +1,211 @@
 {% extends "anthology/base.html" %}
 {% block content %}
-<h3>Reports</h3>
+<div class="container-fluid mt-4 mb-5">
+  <h4 class="mb-3">Reports</h4>
 
-<!-- Filter Form -->
-<!-- Filter Form -->
-<form method="get" class="row g-3 mb-4 align-items-end">
-  <div class="col-md-2">
-    <label class="form-label fw-semibold">Site</label>
-    <input type="text" name="site" class="form-control" placeholder="Enter site"
-           value="{{ selected_site }}">
+  <!-- Filter Row -->
+  <!-- Collapsible Filter Section -->
+<div class="card mb-4 shadow-sm">
+  <div class="card-header d-flex justify-content-between align-items-center" 
+       data-bs-toggle="collapse" 
+       data-bs-target="#filterCollapse" 
+       style="cursor: pointer;">
+    <span class="fw-semibold">Filters</span>
+    <i class="bi bi-chevron-down" id="filterIcon"></i>
   </div>
 
-  <div class="col-md-2">
-    <label class="form-label fw-semibold">Start Date</label>
-    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+  <div class="collapse" id="filterCollapse">
+    <div class="card-body">
+      <form method="get" class="row g-3 text-start">
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Region</label>
+          <input type="text" name="region" value="{{ region }}" class="form-control form-control-sm" placeholder="Region">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Site</label>
+          <input type="text" name="site" value="{{ selected_site }}" class="form-control form-control-sm" placeholder="Site">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Product</label>
+          <input type="text" name="product" value="{{ product }}" class="form-control form-control-sm" placeholder="Product">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Batch</label>
+          <input type="text" name="batch" value="{{ batch }}" class="form-control form-control-sm" placeholder="Batch">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Pass</label>
+          <select name="pass_status" class="form-select form-select-sm text-start">
+            <option value="">All</option>
+            <option value="passed" {% if pass_filter == 'passed' %}selected{% endif %}>Passed</option>
+            <option value="failed" {% if pass_filter == 'failed' %}selected{% endif %}>Failed</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Start Date</label>
+          <input type="date" name="start_date" value="{{ start_date }}" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">End Date</label>
+          <input type="date" name="end_date" value="{{ end_date }}" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Approved By</label>
+          <input type="text" name="approved_by" value="{{ approved_by }}" class="form-control form-control-sm" placeholder="User">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label mb-0 small text-start">Approved On</label>
+          <input type="date" name="approved_on" value="{{ approved_on }}" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-md-12 text-end mt-2">
+          <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+          <a href="{% url 'anthology:reports' %}" class="btn btn-secondary btn-sm">Clear Filters</a>
+        </div>
+      </form>
+    </div>
   </div>
+</div>
 
-  <div class="col-md-2">
-    <label class="form-label fw-semibold">End Date</label>
-    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+
+  <!-- Reports Table Card -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+        <table id="reportsTable" class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light sticky-top">
+            <tr class="fw-bold text-primary">
+              <th>Region</th>
+              <th>Site</th>
+              <th>Batch</th>
+              <th>Product</th>
+              <th class="text-center">Pass</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+              <th>Approved By</th>
+              <th>Approved On</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for r in reports %}
+              <tr>
+                <td>{{ r.region }}</td>
+                <td>{{ r.site }}</td>
+                <td>{{ r.batch }}</td>
+                <td>{{ r.product }}</td>
+                <td class="text-center">
+                  {% if r.passed %}
+                    <span class="badge bg-success">Passed</span>
+                  {% else %}
+                    <span class="badge bg-danger">Failed</span>
+                  {% endif %}
+                </td>
+                <td>{{ r.start_date|date:"Y-m-d" }}</td>
+                <td>{{ r.end_date|date:"Y-m-d" }}</td>
+                <td>{{ r.approved_by }}</td>
+                <td>{{ r.approved_on|date:"Y-m-d H:i" }}</td>
+                <td class="text-center">
+                  <div class="d-flex flex-column align-items-center gap-1">
+                    
+                    <!-- Always show View Details -->
+                    {% if r.report %}
+                      <a href="{% url 'anthology:draft_detail' r.report.id %}" class="btn btn-sm btn-outline-primary w-100">
+                        View Details
+                      </a>
+                    {% else %}
+                      <a href="{% url 'anthology:report_detail' r.id %}" class="btn btn-sm btn-outline-primary w-100">
+                        View Details
+                      </a>
+                    {% endif %}
+
+                    <!-- Then handle file availability -->
+                    {% if r.report %}
+                      {% if r.report.test_pdf %}
+                        <button class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#pdfModal{{ r.report.id }}">
+                          View PDF
+                        </button>                  
+                      {% endif %}                  
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+
+              {% if r.report and r.report.test_pdf %}
+                <div class="modal fade" id="pdfModal{{ r.report.id }}" tabindex="-1" aria-hidden="true">
+                  <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title">View PDF - {{ r.report.product }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <iframe src="{{ r.report.test_pdf.url }}" width="100%" height="600px" style="border:none;"></iframe>
+                      </div>
+                      <div class="modal-footer">
+                        <a href="{{ r.report.test_pdf.url }}" download class="btn btn-outline-primary">Download PDF</a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+            {% empty %}
+              <tr>
+                <td colspan="10" class="text-center text-muted py-3">No reports found.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
+</div>
 
-  <div class="col-md-2">
-    <label class="form-label fw-semibold">Status</label>
-    <select name="status" class="form-select" onchange="this.form.submit()">
-      <option value="final" {% if selected_status == 'final' %}selected{% endif %}>Final</option>
-      <option value="draft" {% if selected_status == 'draft' %}selected{% endif %}>Draft</option>
-    </select>
-  </div>
+<!-- Include DataTables CSS & JS -->
 
-  {% if selected_status == 'final' %}
-  <div class="col-md-2">
-    <label class="form-label fw-semibold">Pass / Fail</label>
-    <select name="pass_status" class="form-select">
-      <option value="">All</option>
-      <option value="passed" {% if pass_filter == 'passed' %}selected{% endif %}>Passed</option>
-      <option value="failed" {% if pass_filter == 'failed' %}selected{% endif %}>Failed</option>
-    </select>
-  </div>
-  {% endif %}
+<!-- Include jQuery first -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script>
 
-  <div class="col-md-1">
-    <button type="submit" class="btn btn-primary w-100">Filter</button>
-  </div>
-  <div class="col-md-1">
-    <a href="{% url 'anthology:reports' %}" class="btn btn-outline-secondary w-100">Clear</a>
-  </div>
-</form>
+  document.addEventListener('DOMContentLoaded', function() {
+    $('#reportsTable').DataTable({
+      "pageLength": 10,
+      "lengthChange": false,
+      "ordering": true,
+      "order": [[6, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": [4, 9] } // Disable sorting on Pass and Action columns
+      ]
+    });
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const filterCollapse = document.getElementById("filterCollapse");
+    const filterIcon = document.getElementById("filterIcon");
+
+    filterCollapse.addEventListener("show.bs.collapse", () => {
+      filterIcon.classList.replace("bi-chevron-down", "bi-chevron-up");
+    });
+
+    filterCollapse.addEventListener("hide.bs.collapse", () => {
+      filterIcon.classList.replace("bi-chevron-up", "bi-chevron-down");
+    });
+  });
 
 
+</script>
 
-<!-- Report Table -->
-<table class="table table-striped align-middle">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Study</th>
-      <th>Site</th>
-      <th>Product</th>
-      {% if selected_status == 'final' %}
-        <th>Approved On</th>
-        <th>Status</th>
-      {% else %}
-        <th>Start Date</th>
-        <th>End Date</th>
-      {% endif %}
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in reports %}
-      <tr>
-        <td>{{ r.id }}</td>
-        <td>{{ r.study_id }}</td>
-        <td>{{ r.site }}</td>
-        <td>{{ r.product }}</td>
-        {% if selected_status == 'final' %}
-          <td>{{ r.approved_on|date:"Y-m-d" }}</td>
-          <td>
-            {% if r.passed %}
-              <span class="badge bg-success">Passed</span>
-            {% else %}
-              <span class="badge bg-danger">Failed</span>
-            {% endif %}
-          </td>
-        {% else %}
-          <td>{{ r.start_date|date:"Y-m-d" }}</td>
-          <td>{{ r.end_date|date:"Y-m-d" }}</td>
-        {% endif %}
-        <td>
-          {% if selected_status == 'final' %}
-            <a href="{% url 'anthology:report_detail' r.id %}" class="btn btn-sm btn-outline-primary">View</a>
-          {% else %}
-            <a href="{% url 'anthology:approval_review' r.id %}" class="btn btn-sm btn-outline-secondary">Review</a>
-          {% endif %}
-        </td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="7" class="text-center text-muted">No reports found.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

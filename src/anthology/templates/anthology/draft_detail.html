@@ -161,184 +161,219 @@
 </div>
 
 <script>
-
   let currentDraftId = '{{ draft.id }}';
   let approvalDecision = null;
   let recipients = [];
   let passFailModalInstance, recipientModalInstance, addEmailModalInstance, confirmModalInstance;
-  
+
   let defaultRecipients = [
     "qa_team@example.com",
     "manufacturing@example.com",
     "compliance@example.com",
     "manager@example.com"
-    ];
+  ];
   let extraRecipients = [];
 
-  function openRecipientModal() {
-  recipients = [...defaultRecipients, ...extraRecipients];
-  renderRecipientList();
-  recipientModalInstance.show();
-}
-
-function addEmail() {
-  const email = document.getElementById('emailInput').value.trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Enter valid email');
-  if (recipients.includes(email)) return alert('Already added');
-  extraRecipients.push(email);  // 👈 track only user-added ones
-  recipients = [...defaultRecipients, ...extraRecipients];
-  addEmailModalInstance.hide();
-  renderRecipientList();
-}
-
-async function submitApproval(passed) {
-  const comments = document.getElementById('comments').value.trim();
-  const res = await fetch(`/approvals/review/${currentDraftId}/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-    body: JSON.stringify({ passed, recipients: [...defaultRecipients, ...extraRecipients], comments })
-  });
-  if (res.ok) {
-    alert('Approval submitted successfully!');
-    location.reload();
-  } else {
-    alert('Error submitting approval.');
-  }
-}
-
+  // ✅ Initialize modals
   document.addEventListener('DOMContentLoaded', () => {
     passFailModalInstance = new bootstrap.Modal(document.getElementById('passFailModal'));
     recipientModalInstance = new bootstrap.Modal(document.getElementById('recipientModal'));
     addEmailModalInstance = new bootstrap.Modal(document.getElementById('addEmailModal'));
     confirmModalInstance = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    // ✅ Listen for radio changes so decision stays updated
+    document.querySelectorAll('input[name="decision"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        readRadioDecision();
+      });
+    });
   });
 
+  // ✅ Read current radio selection and update approvalDecision
+  function readRadioDecision() {
+    const sel = document.querySelector('input[name="decision"]:checked');
+    if (!sel) {
+      approvalDecision = null;
+      return false;
+    }
+    approvalDecision = sel.value === 'pass';
+    return true;
+  }
+
+  // ✅ Precheck previously selected radio when re-opening modal
+  function precheckRadio() {
+    document.querySelectorAll('input[name="decision"]').forEach(r => r.checked = false);
+    if (approvalDecision === null) return;
+    const val = approvalDecision ? 'pass' : 'fail';
+    const target = document.querySelector(`input[name="decision"][value="${val}"]`);
+    if (target) target.checked = true;
+  }
+
+  // ✅ Open approval modal (Pass/Fail)
   function openApprovalDialog() {
-    recipients = [];
-    approvalDecision = null;
+    precheckRadio();
     passFailModalInstance.show();
   }
 
-  function selectDecision(passed) {
-    approvalDecision = passed;
+  // ✅ Cancel approval process
+  function cancelApproval() {
     passFailModalInstance.hide();
-    setTimeout(() => {
-      renderRecipientList();
-      recipientModalInstance.show();
-    }, 300);
   }
 
-function renderRecipientList() {
-  const listDiv = document.getElementById('recipientList');
+  // ✅ Confirm button on Pass/Fail modal (moves to recipient modal)
+  function confirmDecision() {
+    const ok = readRadioDecision();
+    if (!ok) {
+      alert("⚠️ Please select Pass or Fail before confirming.");
+      return;
+    }
 
-  listDiv.innerHTML = "";
+    recipients = [...defaultRecipients, ...extraRecipients];
+    renderRecipientList();
 
-  recipients.forEach((email, i) => {
-    const isDefault = defaultRecipients.includes(email); // identify system emails
-
-    listDiv.innerHTML += `
-      <div class="d-flex justify-content-between align-items-center mb-2 border p-2 rounded">
-        <span>${email}</span>
-        ${
-          isDefault 
-          ? `<span class="badge bg-secondary">Locked</span>`
-          : `<button class="btn btn-sm btn-outline-danger" onclick="removeRecipient(${i})">
-               Remove
-             </button>`
-        }
-      </div>
-    `;
-  });
-
-  if (recipients.length === 0) {
-    listDiv.innerHTML = '<p class="text-muted small">No recipients added yet.</p>';
+    passFailModalInstance.hide();
+    setTimeout(() => recipientModalInstance.show(), 300);
   }
-}
 
+  // ✅ Open Edit Mail List modal (also checks decision)
+  function openRecipientModal() {
+    const ok = readRadioDecision();
+    if (!ok) {
+      alert("⚠️ Please select Pass or Fail before editing recipients.");
+      return;
+    }
 
+    recipients = [...defaultRecipients, ...extraRecipients];
+    renderRecipientList();
+
+    passFailModalInstance.hide();
+    setTimeout(() => recipientModalInstance.show(), 300);
+  }
+
+  // ✅ Render recipient list with lock icons for defaults
+  function renderRecipientList() {
+    const listDiv = document.getElementById('recipientList');
+    listDiv.innerHTML = "";
+
+    recipients.forEach((email, i) => {
+      const isDefault = defaultRecipients.includes(email);
+      listDiv.innerHTML += `
+        <div class="d-flex justify-content-between align-items-center mb-2 border p-2 rounded">
+          <span>${email}</span>
+          ${
+            isDefault
+              ? `<span class="badge bg-secondary">Locked</span>`
+              : `<button class="btn btn-sm btn-outline-danger" onclick="removeRecipient(${i})">Remove</button>`
+          }
+        </div>
+      `;
+    });
+
+    if (recipients.length === 0) {
+      listDiv.innerHTML = '<p class="text-muted small">No recipients added yet.</p>';
+    }
+  }
+
+  // ✅ Open "Add Email" modal
   function openAddEmailModal() {
     document.getElementById('emailInput').value = '';
     addEmailModalInstance.show();
   }
 
+  // ✅ Close "Add Email" modal
   function closeAddEmailModal() {
     addEmailModalInstance.hide();
   }
 
+  // ✅ Add new recipient (only user-added emails removable)
   function addEmail() {
     const email = document.getElementById('emailInput').value.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Enter valid email');
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Enter a valid email');
     if (recipients.includes(email)) return alert('Already added');
-    recipients.push(email);
+
+    extraRecipients.push(email);
+    recipients = [...defaultRecipients, ...extraRecipients];
     addEmailModalInstance.hide();
     renderRecipientList();
   }
 
-function removeRecipient(i) {
-  const email = recipients[i];
-  if (defaultRecipients.includes(email)) {
-    return; // block removal
+  // ✅ Remove only user-added recipients
+  function removeRecipient(i) {
+    const email = recipients[i];
+    if (defaultRecipients.includes(email)) return; // Locked
+
+    extraRecipients = extraRecipients.filter(e => e !== email);
+    recipients = [...defaultRecipients, ...extraRecipients];
+    renderRecipientList();
   }
 
-  // Remove only user-added ones
-  extraRecipients = extraRecipients.filter(e => e !== email);
-  recipients = [...defaultRecipients, ...extraRecipients];
-  renderRecipientList();
-}
-
-
+  // ✅ Back to Pass/Fail modal
   function backToPassFail() {
     recipientModalInstance.hide();
-    setTimeout(() => passFailModalInstance.show(), 300);
+    setTimeout(() => {
+      precheckRadio();
+      passFailModalInstance.show();
+    }, 300);
   }
 
+  // ✅ Open Confirm Modal (Final step)
   function openConfirmModal() {
+    if (approvalDecision === null) {
+      const ok = readRadioDecision();
+      if (!ok) {
+        alert("⚠️ Please select Pass or Fail first before proceeding.");
+        return;
+      }
+    }
+
     recipientModalInstance.hide();
+
     setTimeout(() => {
-      const confirmDecision = document.getElementById('confirmDecision');
-      confirmDecision.textContent = approvalDecision ? 'Pass' : 'Fail';
-      confirmDecision.className = approvalDecision ? 'badge bg-success' : 'badge bg-danger';
-      document.getElementById('confirmRecipientList').innerHTML =
-        recipients.length ? recipients.map(e => `<li>• ${e}</li>`).join('') : '<li class="text-muted">No recipients</li>';
+      const confirmDecision = document.getElementById("confirmDecision");
+      confirmDecision.textContent = approvalDecision ? "Pass" : "Fail";
+      confirmDecision.className = approvalDecision ? "badge bg-success" : "badge bg-danger";
+
+      document.getElementById("confirmRecipientList").innerHTML = recipients.length
+        ? recipients.map((e) => `<li>• ${e}</li>`).join("")
+        : '<li class="text-muted">No recipients</li>';
+
       confirmModalInstance.show();
     }, 300);
   }
 
+  // ✅ Back to Recipients from Confirm modal
   function backToRecipients() {
     confirmModalInstance.hide();
     setTimeout(() => recipientModalInstance.show(), 300);
   }
 
+  // ✅ Final submit approval
   async function submitApproval() {
+    if (approvalDecision === null) {
+      alert("⚠️ Please select Pass or Fail before submitting.");
+      return;
+    }
+
     const comments = document.getElementById('comments').value.trim();
     const res = await fetch(`/approvals/review/${currentDraftId}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-      body: JSON.stringify({ passed: approvalDecision, recipients, comments })
+      body: JSON.stringify({
+        passed: approvalDecision,
+        recipients,
+        comments
+      })
     });
+
     if (res.ok) {
-      alert('Approval submitted successfully!');
+      alert('✅ Approval submitted successfully!');
       location.reload();
     } else {
-      alert('Error submitting approval.');
+      alert('❌ Error submitting approval.');
     }
   }
 
-  function openConfirmModal() {
-    recipientModalInstance.hide();
-    setTimeout(() => {
-      const confirmDecision = document.getElementById('confirmDecision');
-      confirmDecision.textContent = approvalDecision ? 'Pass' : 'Fail';
-      confirmDecision.className = approvalDecision ? 'badge bg-success' : 'badge bg-danger';
-      document.getElementById('confirmRecipientList').innerHTML =
-        recipients.length ? recipients.map(e => `<li>• ${e}</li>`).join('') : '<li class="text-muted">No recipients</li>';
-      confirmModalInstance.show();
-    }, 300);
-}
-
-
-
-
+  // ✅ Utility: get CSRF token
   function getCookie(name) {
     const cookies = document.cookie.split(';');
     for (let c of cookies) {
@@ -347,27 +382,6 @@ function removeRecipient(i) {
     }
     return null;
   }
-
-  function openApprovalDialog() {
-    approvalDecision = null;
-    passFailModalInstance.show();
-}
-
-function cancelApproval() {
-    passFailModalInstance.hide();
-}
-
-function confirmDecision() {
-    const selected = document.querySelector('input[name="decision"]:checked');
-    if (!selected) return alert("Please select Pass or Fail first");
-
-    approvalDecision = selected.value === "pass";
-    passFailModalInstance.hide();
-    openConfirmModal();   // go to confirm modal next
-}
-
-
-
 </script>
 
 {% endblock %}
